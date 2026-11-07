@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Nouvel onglet : mes cours",
+  "description": "Mes cours Moodle UM en un clic, dans le style du portfolio.",
+  "version": "1.0.0",
+  "permissions": ["favicon"],
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  }
+}

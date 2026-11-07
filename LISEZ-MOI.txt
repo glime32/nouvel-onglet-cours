@@ -1,0 +1,32 @@
+NOUVEL ONGLET : MES COURS
+=========================
+
+INSTALLER (une seule fois, dans Helium)
+1. Tape helium://extensions dans la barre d'adresse.
+2. Active « Mode développeur » (en haut à droite).
+3. Clique « Charger l'extension non empaquetée » et choisis ce dossier :
+   ~/extensions/nouvel-onglet
+4. Ouvre un nouvel onglet. Si Helium demande s'il faut garder cette page,
+   clique « Conserver ».
+
+Deux écrans : en haut les raccourcis, molette (ou flèche bas, ou glisser
+sur l'écran tactile) = volet animé vers « Mes cours ». Vers le haut = retour.
+Un clic sur une carte : le site charge tout de suite, la carte s'agrandit
+pendant le chargement. Échap ou clic = refermer si tu annules.
+
+La barre d'adresse garde le curseur : tu peux toujours taper une recherche.
+Ctrl+clic ou clic molette sur un cours = l'ouvrir dans un autre onglet.
+
+MODIFIER (S2, nouveau cours, lien en plus)
+Ouvre cours.js avec un éditeur de texte. C'est le seul fichier à changer.
+- Un cours Moodle : ouvre-le, copie le nombre après « ?id= » dans l'URL.
+- Ajoute une ligne comme celles déjà là, avec un « dessin » de la liste.
+Enregistre, puis ouvre un nouvel onglet. Si rien ne change : helium://extensions,
+bouton ↻ sur la carte de l'extension.
+
+FICHIERS
+cours.js     tes cours et tes liens
+newtab.html  la page
+style.css    le style (fond OLED noir, bleu et violet)
+app.js       le moteur
+fonts/       Archivo et Gloock, les polices du portfolio (licence OFL)
