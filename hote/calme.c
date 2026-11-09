@@ -35,8 +35,7 @@ static int lancer(char *const argv[]) {
   pid_t pid = fork();
   if (pid < 0) return 0;
   if (pid == 0) {
-    int nul = dup(2);
-    dup2(nul, 1); /* stdout appartient au protocole */
+    if (dup2(2, 1) < 0) _exit(127); /* stdout appartient au protocole */
     execvp(argv[0], argv);
     _exit(127);
   }
