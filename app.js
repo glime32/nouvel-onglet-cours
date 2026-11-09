@@ -183,6 +183,23 @@
     });
   }
 
+  // Moodle ou Prose utilisés depuis moins de 12 h : la liaison avec leurs serveurs
+  // (et CAS) se prépare dès l'ouverture de l'onglet, pas seulement au survol
+  if (canFav) {
+    chrome.storage.local.get(["vuMoodle", "vuProse"]).then(({ vuMoodle = 0, vuProse = 0 }) => {
+      const recent = (t) => Date.now() - t < 12 * 3600e3;
+      const hotes = new Set();
+      if (recent(vuMoodle)) ["https://moodle.umontpellier.fr", "https://cas.umontpellier.fr"].forEach((h) => hotes.add(h));
+      if (recent(vuProse)) ["https://app.umontpellier.fr", "https://cas.umontpellier.fr"].forEach((h) => hotes.add(h));
+      for (const h of hotes) {
+        const l = document.createElement("link");
+        l.rel = "preconnect";
+        l.href = h;
+        document.head.append(l);
+      }
+    });
+  }
+
   /* ---------- Écran 2 : en-tête ---------- */
   $("titre").textContent = C.titre || "Mes cours";
   $("sous-titre").textContent = C.sousTitre || "";

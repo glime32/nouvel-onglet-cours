@@ -8,16 +8,21 @@
 
   const ici = new URL(location.href);
 
-  /* ---------- 1. connexion ---------- */
-  if (ici.pathname === "/login/index.php" && !ici.searchParams.has("authCAS")) {
-    const cas = document.querySelector('a.login-identityprovider-btn[href*="authCAS=CAS"]');
+  /* ---------- 1. connexion ----------
+     Page de connexion, ou n'importe quelle page vue « connecté anonymement » :
+     on part tout droit chez CAS (qui te reconnaît souvent sans rien demander).
+     Une fois par minute au plus dans cet onglet, pour ne jamais boucler. */
+  const CAS_DIRECT = "https://cas.umontpellier.fr/cas/login?service=" + encodeURIComponent("https://moodle.umontpellier.fr/login/index.php?authCAS=CAS");
+  const surConnexion = ici.pathname === "/login/index.php" && !ici.searchParams.has("authCAS");
+  const anonyme = document.body && document.body.classList.contains("notloggedin") && !ici.pathname.startsWith("/login/");
+  if (surConnexion || anonyme) {
     const CLE = "fac-auto-moodle";
-    // « PDF Moodle Restore » clique aussi ce bouton : un seul des deux part
-    const recent = (k) => Date.now() - Number(sessionStorage.getItem(k) || 0) < 30e3;
-    if (cas && !recent(CLE) && !recent("autoLogin")) {
+    // « PDF Moodle Restore » clique aussi le bouton CAS : un seul des deux part
+    const recent = (k, ms) => Date.now() - Number(sessionStorage.getItem(k) || 0) < ms;
+    if (!recent(CLE, 60e3) && !recent("autoLogin", 30e3)) {
       sessionStorage.setItem(CLE, String(Date.now()));
       sessionStorage.setItem("autoLogin", String(Date.now()));
-      location.replace(cas.href);
+      location.replace(CAS_DIRECT);
     }
     return;
   }

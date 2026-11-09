@@ -30,10 +30,15 @@ le déclare au navigateur). Sans lui, tout marche sauf la coupure des
 notifications.
 
 FAC (Université de Montpellier)
-- CAS : la page de connexion est validée toute seule dès que ton gestionnaire
-  de mots de passe l'a remplie (jamais après une erreur, une fois par minute
-  au plus). Il faut donc que le mot de passe y soit enregistré.
-- Moodle : connexion CAS directe, et un bouton « Tout télécharger » sur chaque
+- CAS : mets ton identifiant et ton mot de passe dans ~/.config/fac/identifiants
+  (droits 600, préparé vide par sh hote/installer.sh). La page de connexion est
+  alors remplie et validée tout de suite (jamais après une erreur, une fois par
+  minute au plus). Sans ce fichier, l'extension attend ton gestionnaire de mots
+  de passe.
+- Connexion en arrière-plan : quand CAS t'a oublié, l'extension se reconnecte
+  sans afficher de page. Un refus arrête les essais 24 h et te prévient.
+- Moodle : la page de connexion mène tout droit à CAS, et un bouton
+  « Tout télécharger » sur chaque
   cours (fichiers rangés dans Téléchargements/Moodle-S1/<site>).
 - Sessions : toutes les 20 min, si tu as utilisé Moodle ou Prose dans les
   12 dernières heures, l'extension garde les sessions en vie en fond.
@@ -53,6 +58,8 @@ app.js       le moteur
 seance.js    la séance de révision (tourne en fond)
 pause.html   la page « Pas maintenant » (+ pause.js)
 fond.js      le service en fond (séance + fac-fond.js)
-fac-*.js     CAS, Moodle, Prose et maintien des sessions
-hote/        coupe les notifications KDE pendant le travail
+fac-*.js     CAS, Moodle, Prose, connexion et maintien des sessions
+regles-fac.json  la page de connexion Moodle va tout droit à CAS
+hote/        notifications KDE (calme.c) et identifiants de la fac (identifiants.c)
+tools/       faux Moodle / CAS / Prose pour tester sans les vrais sites
 fonts/       Archivo et Gloock, les polices du portfolio (licence OFL)

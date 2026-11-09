@@ -32,8 +32,9 @@ Un raccourci centré sous les huit autres, « Continuer » : un clic ouvre ton s
 
 Pour l'Université de Montpellier (les adresses sont dans `manifest.json` et `fac-*.js`) :
 
-- **CAS** : la page de connexion est validée toute seule dès que ton gestionnaire de mots de passe l'a remplie. Jamais après une erreur, au plus une fois par minute. Il faut donc que ton mot de passe y soit enregistré, avec le remplissage automatique au chargement de la page.
-- **Moodle** : connexion CAS directe, et un bouton « Tout télécharger » sur chaque cours, qui range ses fichiers dans `Téléchargements/Moodle-S1/<site>` (sans retélécharger ce qui l'a déjà été).
+- **CAS** : mets ton identifiant et ton mot de passe dans `~/.config/fac/identifiants` (droits 600, préparé vide par `sh hote/installer.sh`). Un petit programme en C, `hote/identifiants.c`, ne les donne qu'à la vraie page CAS, qui est remplie et validée tout de suite, ou à la tâche de fond. Sans ce fichier, l'extension attend ton gestionnaire de mots de passe. Jamais après une erreur, au plus une fois par minute.
+- **Connexion en arrière-plan** : quand CAS t'a oublié, l'extension refait la connexion sans afficher de page, pour Moodle comme pour Prose. Un refus (mauvais mot de passe, étape en plus) arrête tout essai automatique pendant 24 h, avec une notification.
+- **Moodle** : la page de connexion et toute page vue « connecté anonymement » mènent tout droit à CAS (`regles-fac.json`), ce qui évite 3 à 5 s de détour, et un bouton « Tout télécharger » sur chaque cours, qui range ses fichiers dans `Téléchargements/Moodle-S1/<site>` (sans retélécharger ce qui l'a déjà été).
 - **Sessions qui tiennent** : toutes les 20 minutes, au démarrage du navigateur et quand tu reviens au PC, si tu as utilisé Moodle ou Prose dans les 12 dernières heures, l'extension garde les sessions en vie en fond (`core_session_touch` de Moodle, sans jamais en créer une nouvelle, donc sans risque pour un test en cours).
 - Si tu utilises aussi [pdf-moodle-restore](https://github.com/glime32/pdf-moodle-restore), les deux extensions se partagent le clic sur CAS au lieu de valider deux fois.
 
