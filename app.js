@@ -63,11 +63,16 @@
     return img;
   }
 
-  // Bouton « nuancier » du portfolio : carré + barre
-  function swatch(item, color, tileContent, cls, i) {
+  // Bouton « nuancier » du portfolio : carré + barre. Sans lien, c'est un vrai bouton.
+  function swatch(item, color, tileContent, cls, i, onClick) {
     const li = el("li");
-    const a = el("a", "swatch swatch--" + color + (cls ? " " + cls : ""));
-    a.href = urlOf(item);
+    const a = el(onClick ? "button" : "a", "swatch swatch--" + color + (cls ? " " + cls : ""));
+    if (onClick) {
+      a.type = "button";
+      a.addEventListener("click", onClick);
+    } else {
+      a.href = urlOf(item);
+    }
     a.style.setProperty("--i", i);
     const tile = el("span", "swatch__tile");
     tile.setAttribute("aria-hidden", "true");
@@ -99,6 +104,84 @@
     f.append(swatch(r, color, favicon(r.titre, urlOf(r)), "swatch--big", i));
   });
   fill("raccourcis", f);
+
+  /* ---------- Écran 1 : le raccourci « Mode révision », centré sous les autres ----------
+     Un clic : la suite du site de révisions (son bouton Continuer) et la séance démarre.
+     Pendant la séance : le temps qui reste, et « Arrêter » à côté. La séance tourne dans seance.js. */
+  const R = C.revision;
+  if (R && canFav) {
+    const nom = (d) => ({ "youtube.com": "YouTube", "tiktok.com": "TikTok", "instagram.com": "Insta" }[d] || d);
+    const sites = [...new Set((R.bloquer || []).map(nom))];
+    const enPause = sites.length ? sites.slice(0, -1).join(", ") + (sites.length > 1 ? " et " : "") + sites.at(-1) : "";
+    const mmss = (ms) => {
+      const s = Math.max(0, Math.round(ms / 1000));
+      return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+    };
+    const ul = $("revision");
+    const nbRaccourcis = (C.raccourcis || []).length;
+    let seance = null;
+    let tic = 0;
+    let sur = 0;
+
+    const etiquette = () =>
+      seance ? `${seance.phase === "travail" ? "Travail" : "Pause"} · ${mmss(seance.fin - Date.now())}` : "Mode révision";
+
+    function compte() {
+      const k = ul.querySelector(".swatch__kicker");
+      if (k) k.textContent = etiquette();
+    }
+
+    // Deux clics pour arrêter : court, pour ne jamais être coupé par « … »
+    function arreter(e) {
+      const nm = e.currentTarget.querySelector(".swatch__name");
+      const kick = e.currentTarget.querySelector(".swatch__kicker");
+      if (Date.now() > sur) {
+        sur = Date.now() + 4000;
+        const avant = kick.textContent;
+        nm.textContent = "Sûr ?";
+        kick.textContent = "Clique encore";
+        setTimeout(() => {
+          if (Date.now() >= sur) {
+            nm.textContent = "Arrêter";
+            kick.textContent = avant;
+          }
+        }, 4100);
+        return;
+      }
+      chrome.runtime.sendMessage({ type: "arreter" });
+    }
+
+    function montrer() {
+      clearInterval(tic);
+      const f = document.createDocumentFragment();
+      const li = swatch({ kicker: etiquette(), titre: "Continuer" }, "violet", icon("i-star"), "swatch--big", nbRaccourcis, () =>
+        chrome.runtime.sendMessage({ type: seance ? "rouvrir" : "commencer" })
+      );
+      li.firstChild.title = seance
+        ? "Revenir à la séance"
+        : `Ouvre la suite de tes révisions. ${R.travail || 25} min de travail, ${R.pause || 5} min de pause, ${R.blocs || 4} fois.` +
+          (enPause ? ` ${enPause} en pause pendant le travail, notifications coupées.` : "");
+      f.append(li);
+      if (seance) {
+        f.append(swatch({ kicker: `Bloc ${seance.bloc} sur ${seance.blocs}`, titre: "Arrêter" }, "bleu", icon("i-star"), "swatch--big", nbRaccourcis + 1, arreter));
+      }
+      ul.classList.toggle("is-deux", !!seance);
+      ul.replaceChildren(f);
+      ul.hidden = false;
+      if (seance && !document.hidden) tic = setInterval(compte, 1000);
+    }
+
+    // Onglet caché : plus aucun réveil ; il se remet à l'heure en revenant
+    document.addEventListener("visibilitychange", () => {
+      clearInterval(tic);
+      if (seance && !document.hidden) { compte(); tic = setInterval(compte, 1000); }
+    });
+
+    chrome.storage.local.get("seance").then(({ seance: s }) => { seance = s || null; montrer(); });
+    chrome.storage.onChanged.addListener((ch, zone) => {
+      if (zone === "local" && ch.seance) { seance = ch.seance.newValue || null; montrer(); }
+    });
+  }
 
   /* ---------- Écran 2 : en-tête ---------- */
   $("titre").textContent = C.titre || "Mes cours";

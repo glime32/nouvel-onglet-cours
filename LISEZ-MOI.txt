@@ -17,6 +17,27 @@ pendant le chargement. Échap ou clic = refermer si tu annules.
 La barre d'adresse garde le curseur : tu peux toujours taper une recherche.
 Ctrl+clic ou clic molette sur un cours = l'ouvrir dans un autre onglet.
 
+MODE RÉVISION (raccourci centré sous les 8 autres)
+Un clic : ton site de révisions s'ouvre sur la suite (comme son bouton
+Continuer), dans un groupe d'onglets « Révision », puis 25 min de travail /
+5 min de pause, 4 fois. Pendant la séance, le raccourci montre le temps qui
+reste et ramène au site ; « Arrêter » apparaît à côté. Pendant le travail, les sites de la liste « bloquer » (cours.js)
+affichent « Pas maintenant » et reviennent tout seuls à la pause ; les
+notifications KDE sont coupées. « Arrêter » demande un deuxième clic.
+Les notifications passent par un petit programme en C : hote/calme.c.
+Pour l'installer : sh hote/installer.sh (il le compile dans ~/.local/bin et
+le déclare au navigateur). Sans lui, tout marche sauf la coupure des
+notifications.
+
+FAC (Université de Montpellier)
+- CAS : la page de connexion est validée toute seule dès que ton gestionnaire
+  de mots de passe l'a remplie (jamais après une erreur, une fois par minute
+  au plus). Il faut donc que le mot de passe y soit enregistré.
+- Moodle : connexion CAS directe, et un bouton « Tout télécharger » sur chaque
+  cours (fichiers rangés dans Téléchargements/Moodle-S1/<site>).
+- Sessions : toutes les 20 min, si tu as utilisé Moodle ou Prose dans les
+  12 dernières heures, l'extension garde les sessions en vie en fond.
+
 MODIFIER (S2, nouveau cours, lien en plus)
 Ouvre cours.js avec un éditeur de texte. C'est le seul fichier à changer.
 - Un cours Moodle : ouvre-le, copie le nombre après « ?id= » dans l'URL.
@@ -29,4 +50,9 @@ cours.js     tes cours et tes liens
 newtab.html  la page
 style.css    le style (fond OLED noir, bleu et violet)
 app.js       le moteur
+seance.js    la séance de révision (tourne en fond)
+pause.html   la page « Pas maintenant » (+ pause.js)
+fond.js      le service en fond (séance + fac-fond.js)
+fac-*.js     CAS, Moodle, Prose et maintien des sessions
+hote/        coupe les notifications KDE pendant le travail
 fonts/       Archivo et Gloock, les polices du portfolio (licence OFL)
