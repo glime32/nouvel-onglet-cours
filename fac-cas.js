@@ -10,6 +10,10 @@
   const bouton = document.getElementById("submitBtn");
   if (!u || !p || !bouton) return;
 
+  // l'empreinte que la page vient de calculer : la connexion en fond la renverra
+  const empreinte = document.querySelector('input[name="deviceFingerprint"]');
+  if (empreinte && empreinte.value) chrome.runtime.sendMessage({ type: "empreinte", empreinte: empreinte.value }).catch(() => {});
+
   // erreur affichée (mauvais mot de passe, compte bloqué…) : on ne touche à rien
   if (document.querySelector("#loginErrorsPanel, .banner-danger, .alert-danger")) return;
 

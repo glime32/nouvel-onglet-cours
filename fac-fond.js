@@ -13,11 +13,16 @@ const PROSE = "https://app.umontpellier.fr/prose-etudiant/protected/planning";
 const RECENT = 12 * 3600e3;
 const PAUSE_REFUS = 24 * 3600e3;
 const HOTE_FAC = "com.glime.fac";
+const PDF_VIEWER = "oemmndcbldboiebfnladdacbdfmadadm";
 
 chrome.runtime.onMessage.addListener((m, sender, reponse) => {
   if (m.type === "telecharger") {
     telecharger(m.fichiers || []).then(reponse);
     return true;
+  }
+  if (m.type === "empreinte" && m.empreinte) {
+    if (sender.id === chrome.runtime.id && (sender.url || "").startsWith(CAS + "/")) chrome.storage.local.set({ casEmpreinte: String(m.empreinte) });
+    return false;
   }
   if (m.type === "sesskey" && m.sesskey) {
     chrome.storage.local.set({ sesskey: m.sesskey });
@@ -34,6 +39,31 @@ chrome.runtime.onMessage.addListener((m, sender, reponse) => {
   }
   return false;
 });
+
+// PDF Viewer vient de lire un PDF de Moodle en entier et le range lui-même :
+// on lui donne le dossier de la matière (d'après la page du cours d'où vient le clic)
+// et on le note comme téléchargé, pour que « Tout télécharger » ne le reprenne pas.
+chrome.runtime.onMessageExternal.addListener((m, sender, reponse) => {
+  if (sender.id !== PDF_VIEWER || !m || m.type !== "rangerPdf") return false;
+  rangerPdf(m).then(reponse);
+  return true;
+});
+
+async function rangerPdf({ url, referer }) {
+  const propre = String(url || "").replace(/[?&]forcedownload=1/, "");
+  if (!propre.startsWith(MOODLE_URL + "/pluginfile.php/")) return null;
+  const { telecharges = {} } = await chrome.storage.local.get("telecharges");
+  if (telecharges[propre]) return { deja: true };
+  telecharges[propre] = Date.now();
+  await chrome.storage.local.set({ telecharges });
+  const id = (/^https:\/\/moodle\.umontpellier\.fr\/course\/view\.php\?(?:.*&)?id=(\d+)/.exec(referer || "") || [])[1];
+  if (!id) return { dossier: "Moodle-S1" };
+  let rangement = "cours-" + id;
+  for (const g of (self.NOUVEL_ONGLET || {}).groupes || []) {
+    for (const c of g.cours || []) if (String(c.id) === id) rangement = c.site || c.code || rangement;
+  }
+  return { dossier: "Moodle-S1/" + rangement };
+}
 
 async function telecharger(fichiers) {
   const { telecharges = {} } = await chrome.storage.local.get("telecharges");
@@ -99,6 +129,10 @@ async function connexion(depart, forcee) {
     const val = /value="([^"]*)"/.exec(balise);
     if (nom) champs.set(nom[1], val ? entites(val[1]) : "");
   }
+  // l'empreinte de l'appareil, que la page CAS calcule (ClientJS) et qu'on a vue lors
+  // d'une vraie connexion : envoyée vide, CAS croit à un nouvel appareil
+  const { casEmpreinte } = await chrome.storage.local.get("casEmpreinte");
+  if (casEmpreinte && champs.has("deviceFingerprint") && !champs.get("deviceFingerprint")) champs.set("deviceFingerprint", casEmpreinte);
   champs.set("username", id.u);
   champs.set("password", id.p);
   const r = await passer(new URL(entites(action[1]), p.url).href, true, { method: "POST", body: champs });
@@ -106,7 +140,8 @@ async function connexion(depart, forcee) {
 
   await chrome.storage.local.set({ casRefus: Date.now() });
   const refus = r && /loginErrorsPanel|banner-danger|alert-danger/.test(r.corps);
-  const etat = refus ? "mot de passe refusé par CAS" : "CAS demande autre chose (un code ?)";
+  const page = ((/<title>([^<]*)/.exec((r && r.corps) || "") || [])[1] || "").trim().slice(0, 80);
+  const etat = refus ? "mot de passe refusé par CAS" : `CAS demande autre chose (un code ?)${casEmpreinte ? "" : ", sans empreinte"}${page ? " : " + page : ""}`;
   chrome.notifications.create("fac-" + Date.now(), {
     type: "basic",
     iconUrl: "icone.png",
@@ -160,7 +195,7 @@ async function prose(forcee) {
 }
 
 let enCours = false;
-async function rafraichir(forcee = false) {
+async function rafraichir(forcee = false, reessai = false) {
   if (enCours) return;
   enCours = true;
   try {
@@ -169,6 +204,8 @@ async function rafraichir(forcee = false) {
     if (forcee || Date.now() - vuMoodle < RECENT) bilan.moodle = await moodle(forcee);
     if (forcee || Date.now() - vuProse < RECENT) bilan.prose = await prose(forcee);
     await chrome.storage.local.set({ facBilan: { ...bilan, quand: Date.now() } });
+    // au réveil, le Wi-Fi n'est souvent pas encore là : un seul nouvel essai 30 s plus tard
+    if (!reessai && Object.values(bilan).includes("injoignable")) chrome.alarms.create("fac-reessai", { delayInMinutes: 0.5 });
   } finally {
     enCours = false;
   }
@@ -187,6 +224,7 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.runtime.onInstalled.addListener(armer);
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === "fac" || a.name === "fac-depart") rafraichir();
+  if (a.name === "fac-reessai") rafraichir(false, true);
 });
 // retour devant le PC (réveil, déverrouillage, après 15 min d'inactivité)
 chrome.idle.onStateChanged.addListener((etat) => {

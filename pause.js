@@ -1,5 +1,6 @@
 /* Page affichée à la place d'un site en pause pendant un bloc de travail.
-   Dès que le bloc se termine (ou que la séance s'arrête), le site revient. */
+   Quand le bloc se termine, le site revient, mais seulement quand l'onglet est
+   à l'écran : pas de rechargement en masse des onglets en arrière-plan. */
 (() => {
   "use strict";
 
@@ -26,8 +27,9 @@
 
   function revenir() {
     clearInterval(tic);
-    if (/^https?:/.test(cible)) location.replace(cible);
-    else $("p-info").textContent = "La séance est finie, tu peux fermer cet onglet.";
+    if (!/^https?:/.test(cible)) $("p-info").textContent = "La séance est finie, tu peux fermer cet onglet.";
+    else if (document.hidden) $("p-info").textContent = `${site} revient quand tu ouvres cet onglet.`;
+    else location.replace(cible);
   }
 
   function afficher() {

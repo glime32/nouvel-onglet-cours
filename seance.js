@@ -49,8 +49,10 @@ async function sites(enPause) {
       : []
   });
   if (!enPause || !MOTIFS.length) return;
+  // Seuls les onglets visibles ou qui jouent du son : les autres restent en veille
+  // et sont mis en pause quand on les ouvre (voir onActivated plus bas).
   const ouverts = await chrome.tabs.query({ url: MOTIFS });
-  for (const t of ouverts) mettreEnPause(t.id, t.url);
+  for (const t of ouverts) if (t.active || t.audible) mettreEnPause(t.id, t.url);
 }
 
 function mettreEnPause(tabId, url) {
@@ -171,4 +173,11 @@ if (R.bloquer.length) {
     },
     { url: R.bloquer.flatMap((h) => [{ hostEquals: h }, { hostSuffix: "." + h }]) }
   );
+
+  chrome.tabs.onActivated.addListener(async ({ tabId }) => {
+    const t = await chrome.tabs.get(tabId).catch(() => null);
+    if (!t || !bloque(t.url || t.pendingUrl)) return;
+    const s = await lire();
+    if (s && s.phase === "travail" && Date.now() < s.fin) mettreEnPause(tabId, t.url || t.pendingUrl);
+  });
 }

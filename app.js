@@ -127,7 +127,7 @@
       seance ? `${seance.phase === "travail" ? "Travail" : "Pause"} · ${mmss(seance.fin - Date.now())}` : "Mode révision";
 
     function compte() {
-      const k = ul.querySelector(".swatch__kicker");
+      const k = ul.querySelector("li:nth-child(" + (R.site ? 2 : 1) + ") .swatch__kicker");
       if (k) k.textContent = etiquette();
     }
 
@@ -154,7 +154,14 @@
     function montrer() {
       clearInterval(tic);
       const f = document.createDocumentFragment();
-      const li = swatch({ kicker: etiquette(), titre: "Continuer" }, "violet", icon("i-star"), "swatch--big", nbRaccourcis, () =>
+      if (R.site) {
+        const acc = swatch({ kicker: "Accueil du site", titre: "Étudier" }, "bleu", icon("i-star"), "swatch--big", nbRaccourcis, () =>
+          chrome.tabs.update({ url: R.site })
+        );
+        acc.firstChild.title = "Ouvre l'accueil de ton site de révisions, sans lancer de séance";
+        f.append(acc);
+      }
+      const li = swatch({ kicker: etiquette(), titre: "Continuer" }, "violet", icon("i-star"), "swatch--big", nbRaccourcis + 1, () =>
         chrome.runtime.sendMessage({ type: seance ? "rouvrir" : "commencer" })
       );
       li.firstChild.title = seance
@@ -163,9 +170,11 @@
           (enPause ? ` ${enPause} en pause pendant le travail, notifications coupées.` : "");
       f.append(li);
       if (seance) {
-        f.append(swatch({ kicker: `Bloc ${seance.bloc} sur ${seance.blocs}`, titre: "Arrêter" }, "bleu", icon("i-star"), "swatch--big", nbRaccourcis + 1, arreter));
+        f.append(swatch({ kicker: `Bloc ${seance.bloc} sur ${seance.blocs}`, titre: "Arrêter" }, "bleu", icon("i-star"), "swatch--big", nbRaccourcis + 2, arreter));
       }
-      ul.classList.toggle("is-deux", !!seance);
+      const n = f.childElementCount;
+      ul.classList.toggle("is-deux", n === 2);
+      ul.classList.toggle("is-trois", n === 3);
       ul.replaceChildren(f);
       ul.hidden = false;
       if (seance && !document.hidden) tic = setInterval(compte, 1000);
