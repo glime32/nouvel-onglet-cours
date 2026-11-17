@@ -14,6 +14,8 @@ const RECENT = 12 * 3600e3;
 const PAUSE_REFUS = 24 * 3600e3;
 const HOTE_FAC = "com.glime.fac";
 const PDF_VIEWER = "oemmndcbldboiebfnladdacbdfmadadm";
+const PDF_MOODLE_RESTORE = "mgbnbkokcgdknokigliflddegnnnpmbg";
+const CONNECTEE = ["touchée", "connectée", "reconnue par CAS", "connectée en arrière-plan"];
 
 chrome.runtime.onMessage.addListener((m, sender, reponse) => {
   if (m.type === "telecharger") {
@@ -43,11 +45,31 @@ chrome.runtime.onMessage.addListener((m, sender, reponse) => {
 // PDF Viewer vient de lire un PDF de Moodle en entier et le range lui-même :
 // on lui donne le dossier de la matière (d'après la page du cours d'où vient le clic)
 // et on le note comme téléchargé, pour que « Tout télécharger » ne le reprenne pas.
+// PDF Moodle Restore, au démarrage : connexion sans onglet avant d'ouvrir la page CAS.
 chrome.runtime.onMessageExternal.addListener((m, sender, reponse) => {
-  if (sender.id !== PDF_VIEWER || !m || m.type !== "rangerPdf") return false;
-  rangerPdf(m).then(reponse);
-  return true;
+  if (!m) return false;
+  if (sender.id === PDF_VIEWER && m.type === "rangerPdf") {
+    rangerPdf(m).then(reponse);
+    return true;
+  }
+  if (sender.id === PDF_MOODLE_RESTORE && m.type === "connecterMoodle") {
+    connecterMoodle().then(reponse);
+    return true;
+  }
+  return false;
 });
+
+async function connecterMoodle() {
+  if (enCours) return { ok: false, etat: "déjà en cours" };
+  enCours = true;
+  try {
+    const etat = await moodle(false, true);
+    await chrome.storage.local.set({ facBilan: { moodle: etat, pour: "PDF Moodle Restore", quand: Date.now() } });
+    return { ok: CONNECTEE.includes(etat), etat };
+  } finally {
+    enCours = false;
+  }
+}
 
 async function rangerPdf({ url, referer }) {
   const propre = String(url || "").replace(/[?&]forcedownload=1/, "");
@@ -154,7 +176,7 @@ async function connexion(depart, forcee) {
   return { ok: false, etat };
 }
 
-async function moodle(forcee) {
+async function moodle(forcee, seulementCas = false) {
   const { sesskey } = await chrome.storage.local.get("sesskey");
   if (sesskey) {
     try {
@@ -179,7 +201,8 @@ async function moodle(forcee) {
   }
   // Onglet Moodle ou CAS ouvert : pas de connexion en douce (deux sessions se
   // croiseraient). La page ouverte se reconnecte toute seule au prochain clic.
-  const ouverts = await chrome.tabs.query({ url: [MOODLE_URL + "/*", CAS + "/*"] });
+  // (au démarrage, les onglets Moodle restaurés n'ont plus de session : seul un onglet CAS compte)
+  const ouverts = await chrome.tabs.query({ url: seulementCas ? [CAS + "/*"] : [MOODLE_URL + "/*", CAS + "/*"] });
   if (ouverts.length && !forcee) return "onglet ouvert : reconnexion au prochain clic";
   const c = await connexion(MOODLE_CAS, forcee);
   const k = c.ok && cleDe(c.corps);
