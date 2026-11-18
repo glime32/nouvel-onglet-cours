@@ -35,6 +35,12 @@ chrome.runtime.onMessage.addListener((m, sender, reponse) => {
     identifiants().then(reponse);
     return true;
   }
+  if (m.type === "connecterFond") {
+    // la page « Connexion… » de l'extension, quand Moodle demande de se connecter
+    if (sender.id !== chrome.runtime.id || !(sender.url || "").startsWith(chrome.runtime.getURL("connexion.html"))) return false;
+    connecterFond().then(reponse);
+    return true;
+  }
   if (m.type === "rafraichir" || m.type === "reconnecter") {
     rafraichir(m.type === "reconnecter").then(() => chrome.storage.local.get("facBilan")).then(({ facBilan }) => reponse(facBilan));
     return true;
@@ -58,6 +64,20 @@ chrome.runtime.onMessageExternal.addListener((m, sender, reponse) => {
   }
   return false;
 });
+
+async function connecterFond() {
+  if (enCours) return { ok: false };
+  enCours = true;
+  try {
+    const c = await connexion(MOODLE_CAS, false);
+    const k = c.ok && cleDe(c.corps);
+    if (k) await chrome.storage.local.set({ sesskey: k });
+    await chrome.storage.local.set({ facBilan: { moodle: c.etat, pour: "page Connexion", quand: Date.now() } });
+    return { ok: c.ok, url: c.url };
+  } finally {
+    enCours = false;
+  }
+}
 
 async function connecterMoodle() {
   if (enCours) return { ok: false, etat: "déjà en cours" };
@@ -136,7 +156,7 @@ const entites = (s) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(
 async function connexion(depart, forcee) {
   const p = await passer(depart, true);
   if (!p) return { ok: false, etat: "injoignable" };
-  if (!surFormulaireCas(p.url)) return { ok: true, etat: "reconnue par CAS", corps: p.corps };
+  if (!surFormulaireCas(p.url)) return { ok: true, etat: "reconnue par CAS", corps: p.corps, url: p.url };
 
   const { casRefus = 0 } = await chrome.storage.local.get("casRefus");
   if (!forcee && Date.now() - casRefus < PAUSE_REFUS) return { ok: false, etat: "CAS a refusé récemment : pas de nouvel essai" };
@@ -158,7 +178,7 @@ async function connexion(depart, forcee) {
   champs.set("username", id.u);
   champs.set("password", id.p);
   const r = await passer(new URL(entites(action[1]), p.url).href, true, { method: "POST", body: champs });
-  if (r && !surFormulaireCas(r.url)) return { ok: true, etat: "connectée en arrière-plan", corps: r.corps };
+  if (r && !surFormulaireCas(r.url)) return { ok: true, etat: "connectée en arrière-plan", corps: r.corps, url: r.url };
 
   await chrome.storage.local.set({ casRefus: Date.now() });
   const refus = r && /loginErrorsPanel|banner-danger|alert-danger/.test(r.corps);
@@ -227,6 +247,7 @@ async function rafraichir(forcee = false, reessai = false) {
     if (forcee || Date.now() - vuMoodle < RECENT) bilan.moodle = await moodle(forcee);
     if (forcee || Date.now() - vuProse < RECENT) bilan.prose = await prose(forcee);
     await chrome.storage.local.set({ facBilan: { ...bilan, quand: Date.now() } });
+    if (CONNECTEE.includes(bilan.moodle)) pdfsDuJour();
     // au réveil, le Wi-Fi n'est souvent pas encore là : un seul nouvel essai 30 s plus tard
     if (!reessai && Object.values(bilan).includes("injoignable")) chrome.alarms.create("fac-reessai", { delayInMinutes: 0.5 });
   } finally {
@@ -262,3 +283,104 @@ chrome.webNavigation.onCompleted.addListener(
   },
   { url: [{ hostEquals: "moodle.umontpellier.fr" }, { hostEquals: "app.umontpellier.fr", pathPrefix: "/prose-etudiant" }] }
 );
+
+/* Une fois par jour, hors partage de connexion : les PDF neufs ou modifiés des cours
+   de cours.js vont dans Moodle-S1/<matière>, pour s'ouvrir sans attendre Moodle.
+   PDF Viewer dit s'il a déjà le fichier (même sous un autre nom) et range les autres. */
+const JOUR_PDF = 20 * 3600e3;
+const echapperRe = (t) => t.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+const RE_PLUGINFILE = new RegExp(echapperRe(MOODLE_URL) + "/pluginfile\\.php/[^\"'<>\\s]+", "g");
+const nomPropre = (t) =>
+  t.replace(/[\/\\:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").replace(/^[.\s]+|[.\s]+$/g, "").slice(0, 120) || "fichier";
+
+async function reseauLimite() {
+  try {
+    const r = await chrome.runtime.sendNativeMessage(HOTE_FAC, { cmd: "reseau" });
+    return !(r && r.ok && r.limitee === false);
+  } catch {
+    return true;
+  }
+}
+
+async function pageTexte(url) {
+  try {
+    const r = await fetch(url, { credentials: "include", cache: "no-store" });
+    return r.ok && !r.url.includes("/login/") && !surFormulaireCas(r.url) ? r.text() : null;
+  } catch {
+    return null;
+  }
+}
+
+async function pluginfileDe(cmid) {
+  const stop = new AbortController();
+  try {
+    const r = await fetch(`${MOODLE_URL}/mod/resource/view.php?id=${cmid}&redirect=1`, { credentials: "include", signal: stop.signal });
+    if (r.url.includes("/pluginfile.php/")) return r.url;
+    if (!(r.headers.get("content-type") || "").includes("html")) return null;
+    const m = (await r.text()).match(RE_PLUGINFILE);
+    return m ? m[0] : null;
+  } catch {
+    return null;
+  } finally {
+    stop.abort();
+  }
+}
+
+// url du PDF → sous-dossier (dossiers Moodle), comme le bouton « Tout télécharger »
+async function pdfsDuCours(id) {
+  const liens = new Map();
+  const ajouter = (url, sous = "") => {
+    const propre = entites(url).replace(/[?&]forcedownload=1/, "");
+    try {
+      if (/\.pdf$/i.test(new URL(propre).pathname) && !liens.has(propre)) liens.set(propre, sous);
+    } catch {}
+  };
+  const ressources = await pageTexte(`${MOODLE_URL}/course/resources.php?id=${id}`);
+  if (ressources === null) return null;
+  const cmids = [...new Set([...ressources.matchAll(/mod\/resource\/view\.php\?id=(\d+)/g)].map((m) => m[1]))];
+  for (let i = 0; i < cmids.length; i += 4) {
+    for (const u of await Promise.all(cmids.slice(i, i + 4).map(pluginfileDe))) if (u) ajouter(u);
+  }
+  const dossiers = (await pageTexte(`${MOODLE_URL}/mod/folder/index.php?id=${id}`)) || "";
+  for (const [, fid, nom] of dossiers.matchAll(/mod\/folder\/view\.php\?id=(\d+)"[^>]*>([^<]*)</g)) {
+    const page = (await pageTexte(`${MOODLE_URL}/mod/folder/view.php?id=${fid}`)) || "";
+    for (const [u] of page.matchAll(RE_PLUGINFILE)) if (u.includes("/mod_folder/content/")) ajouter(u, entites(nom).trim());
+  }
+  for (const [u] of ((await pageTexte(`${MOODLE_URL}/course/view.php?id=${id}`)) || "").matchAll(RE_PLUGINFILE)) ajouter(u);
+  return liens;
+}
+
+let pdfsEnCours = false;
+async function pdfsDuJour() {
+  if (pdfsEnCours) return;
+  pdfsEnCours = true;
+  try {
+    const { pdfsJour = 0 } = await chrome.storage.local.get("pdfsJour");
+    if (Date.now() - pdfsJour < JOUR_PDF || (await reseauLimite())) return;
+    const { telecharges = {} } = await chrome.storage.local.get("telecharges");
+    const bilan = { connus: 0, ranges: 0, quand: Date.now() };
+    for (const g of (self.NOUVEL_ONGLET || {}).groupes || []) {
+      for (const c of g.cours || []) {
+        if (!c.id) continue;
+        const liens = await pdfsDuCours(c.id);
+        if (liens === null) return; // plus connecté : au prochain rafraîchissement
+        const dossier = "Moodle-S1/" + (c.site || c.code || "cours-" + c.id);
+        for (const [url, sous] of liens) {
+          if (telecharges[url]) continue;
+          const nom = nomPropre(decodeURIComponent(new URL(url).pathname.split("/").pop()));
+          const chemin = dossier + "/" + (sous ? nomPropre(sous) + "/" : "") + nom;
+          const r = await chrome.runtime.sendMessage(PDF_VIEWER, { type: "connaitrePdf", url, chemin }).catch(() => null);
+          // sans réponse sûre de PDF Viewer, on ne range rien (pas de doublons à l'aveugle)
+          if (!r || r.erreur) return;
+          telecharges[url] = Date.now();
+          bilan[r.connu ? "connus" : "ranges"]++;
+        }
+        await chrome.storage.local.set({ telecharges });
+      }
+    }
+    await chrome.storage.local.set({ pdfsJour: Date.now(), pdfsBilan: bilan });
+  } finally {
+    pdfsEnCours = false;
+  }
+}
+

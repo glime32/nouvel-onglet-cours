@@ -6,6 +6,8 @@
  *     mot_de_passe=...
  *
  * Refuse de répondre si le fichier est lisible par d'autres (droits 600 exigés).
+ * {"cmd":"reseau"} répond seulement si la connexion est limitée (partage de
+ * connexion d'un téléphone), d'après NetworkManager, sans lire le fichier.
  *
  * cc -O2 -Wall -o fac-identifiants identifiants.c
  */
@@ -90,12 +92,30 @@ static void donner(void) {
   memset(msg, 0, sizeof msg);
 }
 
+static void reseau(void) {
+  /* NMMetered : 1 = oui, 3 = oui (deviné, partage de connexion Android), 2 et 4 = non */
+  FILE *f = popen("busctl get-property org.freedesktop.NetworkManager /org/freedesktop/NetworkManager "
+                  "org.freedesktop.NetworkManager Metered 2>/dev/null", "r");
+  char ligne[64] = "";
+  unsigned v = 0;
+  if (f) {
+    if (!fgets(ligne, sizeof ligne, f)) *ligne = 0;
+    pclose(f);
+  }
+  if (sscanf(ligne, "u %u", &v) != 1) return repondre("{\"ok\":false}");
+  repondre(v == 1 || v == 3 ? "{\"ok\":true,\"limitee\":true}" : "{\"ok\":true,\"limitee\":false}");
+}
+
 int main(void) {
   char msg[256];
   uint32_t len;
   while (lire(&len, 4) == 0) {
     if (len >= sizeof msg || lire(msg, len)) return 1;
-    donner();
+    msg[len] = 0;
+    if (strstr(msg, "\"reseau\""))
+      reseau();
+    else
+      donner();
   }
   return 0;
 }

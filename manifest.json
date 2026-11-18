@@ -66,6 +66,9 @@
   "icons": {
     "128": "icone.png"
   },
+  "web_accessible_resources": [
+    { "resources": ["connexion.html"], "matches": ["https://moodle.umontpellier.fr/*"] }
+  ],
   "chrome_url_overrides": {
     "newtab": "newtab.html"
   }

@@ -5,13 +5,28 @@
     "action": {
       "type": "redirect",
       "redirect": {
-        "url": "https://cas.umontpellier.fr/cas/login?service=https%3A%2F%2Fmoodle.umontpellier.fr%2Flogin%2Findex.php%3FauthCAS%3DCAS"
+        "extensionPath": "/connexion.html"
       }
     },
     "condition": {
       "regexFilter": "^https://moodle\\.umontpellier\\.fr/login/index\\.php$",
       "resourceTypes": [
         "main_frame"
+      ]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "regexFilter": "^https://cas\\.umontpellier\\.fr/pre-otp/(webjars/(bootstrap|material-components-web|mdi__font|datatables)/|js/(jquery-ui|autocomplete/)|css/police/)",
+      "resourceTypes": [
+        "script",
+        "stylesheet",
+        "font"
       ]
     }
   }
