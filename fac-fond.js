@@ -35,6 +35,11 @@ chrome.runtime.onMessage.addListener((m, sender, reponse) => {
     identifiants().then(reponse);
     return true;
   }
+  if (m.type === "proseAJour") {
+    if ((sender.url || "").startsWith("https://proseconsult.umontpellier.fr/"))
+      chrome.notifications.create("prose", { type: "basic", iconUrl: "icone.png", title: "Prose", message: "Emploi du temps à jour", priority: 0 });
+    return false;
+  }
   if (m.type === "connecterFond") {
     // la page « Connexion… » de l'extension, quand Moodle demande de se connecter
     if (sender.id !== chrome.runtime.id || !(sender.url || "").startsWith(chrome.runtime.getURL("connexion.html"))) return false;
