@@ -2,13 +2,14 @@
   "manifest_version": 3,
   "name": "Nouvel onglet : mes cours",
   "description": "Mes cours Moodle UM en un clic, dans le style du portfolio. Mode révision, connexion CAS automatique, bouton « Tout télécharger » sur Moodle.",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "permissions": [
     "favicon",
     "storage",
     "alarms",
     "tabs",
     "tabGroups",
+    "scripting",
     "webNavigation",
     "notifications",
     "declarativeNetRequest",
@@ -19,7 +20,8 @@
   "host_permissions": [
     "https://moodle.umontpellier.fr/*",
     "https://cas.umontpellier.fr/*",
-    "https://app.umontpellier.fr/*"
+    "https://app.umontpellier.fr/*",
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "fond.js"
@@ -80,5 +82,9 @@
   ],
   "chrome_url_overrides": {
     "newtab": "newtab.html"
+  },
+  "action": {
+    "default_title": "Tri YouTube",
+    "default_popup": "youtube.html"
   }
 }
